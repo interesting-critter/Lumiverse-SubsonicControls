@@ -203,11 +203,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const search = createSearchUI(send);
   const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  // Lyrics sit above the playlists disclosure: the lyric body is the only
-// flex:1 child, so anything with a large natural height placed after it would
-// push the lyrics off the bottom of the panel instead of just taking the
-// leftover space.
-panel.append(nowPlaying.root, controls.root, search.root, lyrics.root, playlists.root);
+  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
   cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
 
   let connected = false;

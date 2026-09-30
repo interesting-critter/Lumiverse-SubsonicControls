@@ -1863,13 +1863,7 @@ var SPOTIFY_WIDGET_CSS = `
   overflow: hidden;
 }
 
-/* The reserved tail and the bottom fade are proportional so a short viewport
-   cannot be consumed by them. At fixed pixel sizes, a squeezed lyric viewport
-   turned almost entirely into faded padding, which read as a black panel. */
 .spotify-lyrics-has-content {
-  --lyrics-tail-space: clamp(20px, 14%, 112px);
-  --lyrics-fade-top: clamp(16px, 7%, 40px);
-  --lyrics-fade-tail: clamp(10px, 9%, 56px);
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1877,21 +1871,23 @@ var SPOTIFY_WIDGET_CSS = `
   scrollbar-color: var(--lumiverse-fill-strong) transparent;
   position: relative;
   padding-top: 28px;
-  padding-bottom: var(--lyrics-tail-space);
+  padding-bottom: 112px;
   padding-inline: 6px;
   scroll-padding-top: 34%;
-  scroll-padding-bottom: var(--lyrics-tail-space);
+  scroll-padding-bottom: 112px;
   box-sizing: border-box;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black var(--lyrics-fade-top), black calc(100% - var(--lyrics-fade-tail)), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, black var(--lyrics-fade-top), black calc(100% - var(--lyrics-fade-tail)), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 56px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 56px), transparent 100%);
 }
 
 /* When the tab has no remote transport controls, don't keep the extra tail
    that was reserved for them. Its re-centered active line now uses the full
    read-only lyric viewport. */
 .spotify-lyrics-section[data-transport="false"] .spotify-lyrics-has-content {
-  --lyrics-tail-space: clamp(16px, 8%, 36px);
-  --lyrics-fade-tail: clamp(8px, 6%, 32px);
+  padding-bottom: 36px;
+  scroll-padding-bottom: 36px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 32px), transparent 100%);
 }
 
 .spotify-lyrics-status {
@@ -5469,7 +5465,7 @@ function setup(ctx) {
   const search = createSearchUI(send);
   const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  panel.append(nowPlaying.root, controls.root, search.root, lyrics.root, playlists.root);
+  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
   cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
   let connected = false;
   let currentState = null;
