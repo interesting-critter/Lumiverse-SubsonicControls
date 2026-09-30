@@ -14,8 +14,8 @@ export const SPOTIFY_WIDGET_CSS = `
 .spotify-tab-root {
   display: flex;
   width: 100%;
-  height: var(--spotify-tab-height, 100%);
-  max-height: var(--spotify-tab-height, 100%);
+  height: 100%;
+  max-height: 100%;
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: none;
