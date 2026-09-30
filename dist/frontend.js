@@ -2677,20 +2677,38 @@ function createControlsUI(send) {
   const previous = button(PREVIOUS);
   const playPause = button(PLAY, "spotify-ctrl-btn-main");
   const next = button(NEXT);
-  previous.onclick = () => send({ type: "previous" });
-  next.onclick = () => send({ type: "next" });
+  const error = document.createElement("div");
+  error.className = "spotify-search-error";
+  error.style.cssText = "display:none;font-size:0.8em;color:#e74c3c;margin-top:6px;word-break:break-word";
+  const setError = (message) => {
+    error.textContent = message || "";
+    error.style.display = message ? "" : "none";
+  };
+  const dispatch = (message) => {
+    setError(null);
+    send(message);
+  };
+  previous.onclick = () => dispatch({ type: "previous" });
+  next.onclick = () => dispatch({ type: "next" });
   let isPlaying = false;
-  playPause.onclick = () => send({ type: isPlaying ? "pause" : "play" });
+  playPause.onclick = () => dispatch({ type: isPlaying ? "pause" : "play" });
   row.append(previous, playPause, next);
-  root.append(title, row);
-  return { root, update(state, connected, enabled, titleText = "Player Controls") {
-    root.style.display = connected && enabled ? "" : "none";
-    title.textContent = titleText;
-    isPlaying = !!state?.isPlaying;
-    playPause.innerHTML = isPlaying ? PAUSE : PLAY;
-  }, destroy() {
-    root.remove();
-  } };
+  root.append(title, row, error);
+  return {
+    root,
+    update(state, connected, enabled, titleText = "Player Controls") {
+      root.style.display = connected && enabled ? "" : "none";
+      if (!connected || !enabled)
+        setError(null);
+      title.textContent = titleText;
+      isPlaying = !!state?.isPlaying;
+      playPause.innerHTML = isPlaying ? PAUSE : PLAY;
+    },
+    setError,
+    destroy() {
+      root.remove();
+    }
+  };
 }
 
 // src/ui/search.ts
@@ -5291,6 +5309,7 @@ function setup(ctx) {
     window.removeEventListener("resize", updateTabHeight);
   });
   const nowPlaying = createNowPlayingUI();
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
   const lyrics = createLyricsUI();
@@ -5986,6 +6005,7 @@ function setup(ctx) {
       case "error":
         if (message.operation === "connect" || message.authenticationFailure)
           settings.setError(message.message);
+        controls.setError(TRANSPORT_OPERATIONS.has(message.operation || "") ? message.message : null);
         console.warn("[Subsonic Controls]", message.message);
         break;
     }

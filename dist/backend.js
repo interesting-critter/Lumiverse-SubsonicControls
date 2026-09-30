@@ -204,7 +204,12 @@ async function pause(userId) {
   await jukebox("stop", {}, userId);
 }
 async function next(userId) {
-  await jukebox("skip", {}, userId);
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  if (!Number.isInteger(index) || index < 0)
+    return;
+  await request("jukeboxControl", { action: "skip", index: index + 1 }, userId);
 }
 async function previous(userId) {
   assertJukeboxEnabled(userId);

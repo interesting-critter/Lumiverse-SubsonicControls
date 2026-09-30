@@ -195,6 +195,9 @@ export function setup(ctx: SpindleFrontendContext) {
   });
 
   const nowPlaying = createNowPlayingUI();
+  // Backend operations whose failures belong next to the transport controls
+  // rather than in the settings error area.
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
   const lyrics = createLyricsUI();
@@ -904,6 +907,10 @@ export function setup(ctx: SpindleFrontendContext) {
         break;
       case "error":
         if (message.operation === "connect" || message.authenticationFailure) settings.setError(message.message);
+        // A failed transport command is otherwise indistinguishable from a
+        // dead button, since the backend already recovers and keeps polling.
+        // Temporary: remove once the jukebox commands are confirmed working.
+        controls.setError(TRANSPORT_OPERATIONS.has(message.operation || "") ? message.message : null);
         console.warn("[Subsonic Controls]", message.message);
         break;
     }

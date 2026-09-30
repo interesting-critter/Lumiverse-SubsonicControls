@@ -240,7 +240,17 @@ export async function play(trackId: string | undefined, userId?: string): Promis
   await jukebox("start", {}, userId);
 }
 export async function pause(userId?: string): Promise<void> { await jukebox("stop", {}, userId); }
-export async function next(userId?: string): Promise<void> { await jukebox("skip", {}, userId); }
+export async function next(userId?: string): Promise<void> {
+  // Navidrome rejects a bare `skip` with error 10 ("missing parameter index"),
+  // even though the spec marks index as optional, so the next index is resolved
+  // here instead of relying on the server to advance implicitly.
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  // A negative currentIndex means nothing is loaded, so there is no next track.
+  if (!Number.isInteger(index) || index < 0) return;
+  await request("jukeboxControl", { action: "skip", index: index + 1 }, userId);
+}
 export async function previous(userId?: string): Promise<void> {
   // The Subsonic jukebox API has no "previous" action (its actions are get,
   // status, set, start, stop, skip, add, clear, remove, shuffle, setGain), so
