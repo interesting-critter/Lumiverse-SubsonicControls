@@ -166,11 +166,11 @@ async function getPlaybackState(userId) {
   if (config.enableJukebox) {
     try {
       const response = await request("jukeboxControl", { action: "get" }, userId);
-      const status = response.jukeboxStatus;
-      const index = Number(status?.currentIndex);
-      const current = status?.playing && Number.isInteger(index) ? status.playlist?.entry?.[index] : null;
+      const playlist = response.jukeboxPlaylist;
+      const index = Number(playlist?.currentIndex);
+      const current = Number.isInteger(index) ? playlist?.entry?.[index] : null;
       if (current)
-        return mapState(current, true, "jukebox", Math.max(0, Number(status.position || 0) * 1000), userId);
+        return mapState(current, playlist.playing === true, "jukebox", Math.max(0, Number(playlist.position || 0) * 1000), userId);
     } catch {}
   }
   const response = await request("getNowPlaying", {}, userId);
@@ -185,9 +185,12 @@ async function getPlaybackState(userId) {
   const isPlaying = typeof own.state === "string" ? own.state.toLowerCase() === "playing" : true;
   return mapState(own, isPlaying, "now_playing", positionKnown ? reportedPositionMs : 0, userId, positionKnown);
 }
-async function jukebox(action, values = {}, userId) {
+function assertJukeboxEnabled(userId) {
   if (!getConfig(userId).enableJukebox)
     throw new Error("Server-side Jukebox is disabled. Enable it in Subsonic Controls settings to use playback controls.");
+}
+async function jukebox(action, values = {}, userId) {
+  assertJukeboxEnabled(userId);
   await request("jukeboxControl", { action, ...values }, userId);
 }
 async function play(trackId, userId) {
@@ -204,7 +207,12 @@ async function next(userId) {
   await jukebox("skip", {}, userId);
 }
 async function previous(userId) {
-  await jukebox("previous", {}, userId);
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  if (!Number.isInteger(index) || index <= 0)
+    return;
+  await request("jukeboxControl", { action: "skip", index: index - 1 }, userId);
 }
 async function addToQueue(trackId, userId) {
   await jukebox("add", { id: trackId }, userId);

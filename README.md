@@ -7,7 +7,7 @@ A Lumiverse extension for Subsonic and OpenSubsonic-compatible servers such as N
 - Secure per-user connection settings: server details and preferences in user storage, with Subsonic and Feishin passwords in the Lumiverse secure enclave.
 - Subsonic `ping`, `search3`, `getNowPlaying`, cover-art, and lyrics endpoints.
 - OpenSubsonic `getLyricsBySongId` with a fallback to classic `getLyrics`.
-- Optional server-side Jukebox play, pause, previous, next, play-from-search, and queue actions.
+- Optional server-side Jukebox play, pause, next, play-from-search, and queue actions, plus previous-track control synthesized from the `skip` action.
 - Feishin desktop Remote playback state, artwork, and play/pause/previous/next controls.
 - The recommended Subsonic token authentication scheme (`t=md5(password + salt)`) with a fresh salt per request.
 

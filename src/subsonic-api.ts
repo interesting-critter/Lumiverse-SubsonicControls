@@ -192,10 +192,16 @@ export async function getPlaybackState(userId?: string): Promise<PlaybackState |
   if (config.enableJukebox) {
     try {
       const response = await request("jukeboxControl", { action: "get" }, userId);
-      const status = response.jukeboxStatus;
-      const index = Number(status?.currentIndex);
-      const current = status?.playing && Number.isInteger(index) ? status.playlist?.entry?.[index] : null;
-      if (current) return mapState(current, true, "jukebox", Math.max(0, Number(status.position || 0) * 1000), userId);
+      // Subsonic returns jukeboxPlaylist for action=get, and jukeboxStatus for
+      // every other action. The playlist extends the status with the entry
+      // list, so both the index and the entries live on this one object.
+      const playlist = response.jukeboxPlaylist;
+      const index = Number(playlist?.currentIndex);
+      const current = Number.isInteger(index) ? playlist?.entry?.[index] : null;
+      // currentIndex stays put while stopped, so the track must be resolved
+      // regardless of `playing`. Otherwise pausing would drop the state and
+      // fall back to getNowPlaying, which never reports jukebox playback.
+      if (current) return mapState(current, playlist.playing === true, "jukebox", Math.max(0, Number(playlist.position || 0) * 1000), userId);
     } catch {
       // This optional probe falls back to getNowPlaying. Let the caller report
       // a failed state fetch rather than logging the same outage twice.
@@ -218,8 +224,12 @@ export async function getPlaybackState(userId?: string): Promise<PlaybackState |
   return mapState(own, isPlaying, "now_playing", positionKnown ? reportedPositionMs : 0, userId, positionKnown);
 }
 
-async function jukebox(action: string, values: Record<string, string | number | undefined> = {}, userId?: string): Promise<void> {
+function assertJukeboxEnabled(userId?: string): void {
   if (!getConfig(userId).enableJukebox) throw new Error("Server-side Jukebox is disabled. Enable it in Subsonic Controls settings to use playback controls.");
+}
+
+async function jukebox(action: string, values: Record<string, string | number | undefined> = {}, userId?: string): Promise<void> {
+  assertJukeboxEnabled(userId);
   await request("jukeboxControl", { action, ...values }, userId);
 }
 
@@ -231,7 +241,18 @@ export async function play(trackId: string | undefined, userId?: string): Promis
 }
 export async function pause(userId?: string): Promise<void> { await jukebox("stop", {}, userId); }
 export async function next(userId?: string): Promise<void> { await jukebox("skip", {}, userId); }
-export async function previous(userId?: string): Promise<void> { await jukebox("previous", {}, userId); }
+export async function previous(userId?: string): Promise<void> {
+  // The Subsonic jukebox API has no "previous" action (its actions are get,
+  // status, set, start, stop, skip, add, clear, remove, shuffle, setGain), so
+  // going back is expressed as a skip to the preceding playlist index.
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  // currentIndex is -1 (or absent) when nothing is loaded, and 0 is the first
+  // track, so neither has a previous entry.
+  if (!Number.isInteger(index) || index <= 0) return;
+  await request("jukeboxControl", { action: "skip", index: index - 1 }, userId);
+}
 export async function addToQueue(trackId: string, userId?: string): Promise<void> { await jukebox("add", { id: trackId }, userId); }
 
 function toLrcTimestamp(startMs: number): string {
