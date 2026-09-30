@@ -11,8 +11,11 @@ export type FrontendToBackend =
   | { type: "pause" }
   | { type: "next" }
   | { type: "previous" }
+  | { type: "shuffle" }
   | { type: "search"; query: string }
   | { type: "queue"; trackUri: string }
+  | { type: "get_playlists" }
+  | { type: "play_playlist"; playlistId: string }
   | { type: "get_chat_songs"; chatId: string }
   | { type: "get_lyrics" }
   | { type: "album_colors"; colors: AlbumColors | null; artworkKey?: string | null };
@@ -22,6 +25,7 @@ export type BackendToFrontend =
   | { type: "config"; serverUrl: string; username: string; hasPassword: boolean; remoteControl: RemoteControl; feishinUrl: string; feishinUsername: string; hasFeishinPassword: boolean; playbackPositionOffsetMs: number; jukeboxUnavailableReason: string | null; connected: boolean }
   | { type: "widget_preferences"; preferences: WidgetPrefs | null }
   | { type: "search_results"; results: SearchResult[] }
+  | { type: "playlists"; playlists: PlaylistSummary[] }
   | { type: "chat_songs"; chatId: string; entries: MessageSongEntry[] }
   | { type: "message_song"; chatId: string; messageId: string; swipeId: number; snapshot: SongSnapshot }
   | { type: "connected" }
@@ -79,6 +83,15 @@ export interface SearchResult {
   albumArtUrl: string | null;
   uri: string;
   durationMs: number;
+}
+
+/** A saved playlist, as returned by the Subsonic getPlaylists endpoint. */
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  owner: string;
+  songCount: number;
+  albumArtUrl: string | null;
 }
 
 /** A track frozen at the instant an assistant-message swipe began. */

@@ -5,6 +5,7 @@ import { createSettingsUI } from "./ui/settings";
 import { createNowPlayingUI } from "./ui/now-playing";
 import { createControlsUI } from "./ui/controls";
 import { createSearchUI } from "./ui/search";
+import { createPlaylistsUI } from "./ui/playlists";
 import { createLyricsUI } from "./ui/lyrics";
 import { createMiniPlayerUI } from "./ui/mini-player";
 import { createModernWidgetPlayerUI } from "./ui/modern-widget-player";
@@ -195,11 +196,15 @@ export function setup(ctx: SpindleFrontendContext) {
   });
 
   const nowPlaying = createNowPlayingUI();
+  // Backend operations whose failures belong next to the transport controls
+  // rather than in the settings error area.
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "shuffle", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
+  const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  panel.append(nowPlaying.root, controls.root, search.root, lyrics.root);
-  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => lyrics.destroy());
+  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
+  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
 
   let connected = false;
   let currentState: PlaybackState | null = null;
@@ -812,6 +817,10 @@ export function setup(ctx: SpindleFrontendContext) {
         settings.update(message.connected, message.serverUrl, message.username, message.hasPassword, message.remoteControl, message.feishinUrl, message.feishinUsername, message.hasFeishinPassword, message.playbackPositionOffsetMs, message.jukeboxUnavailableReason);
         search.setAvailable(true);
         search.setPlaybackAvailable(message.remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(message.remoteControl === "jukebox");
+        // Playlists come from the Subsonic server regardless of the chosen
+        // transport, so the list is browsable even in Now-playing-only mode.
+        send({ type: "get_playlists" });
         controls.update(currentState, connected, message.remoteControl !== "none", message.remoteControl === "feishin" ? "Feishin Controls" : "Jukebox Controls");
         syncWidget();
         break;
@@ -883,6 +892,7 @@ export function setup(ctx: SpindleFrontendContext) {
         connected = false; currentState = null; lyricsTrackId = null; jukeboxEnabled = false;
         search.setAvailable(true);
         search.setPlaybackAvailable(remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(remoteControl === "jukebox");
         lastThemeArtUrl = null;
         albumPaletteCache.clear();
         clearAlbumTheme();
@@ -892,6 +902,7 @@ export function setup(ctx: SpindleFrontendContext) {
         syncWidget();
         break;
       case "search_results": search.setResults(message.results); break;
+      case "playlists": playlists.setPlaylists(message.playlists); break;
       case "chat_songs": songBadges.setChatSongs(message.chatId, message.entries); break;
       case "message_song": songBadges.setMessageSong(message.chatId, message.messageId, message.swipeId, message.snapshot); break;
       case "lyrics":
@@ -904,6 +915,10 @@ export function setup(ctx: SpindleFrontendContext) {
         break;
       case "error":
         if (message.operation === "connect" || message.authenticationFailure) settings.setError(message.message);
+        // A failed transport command is otherwise indistinguishable from a
+        // dead button, since the backend already recovers and keeps polling.
+        // Temporary: remove once the jukebox commands are confirmed working.
+        controls.setError(TRANSPORT_OPERATIONS.has(message.operation || "") ? message.message : null);
         console.warn("[Subsonic Controls]", message.message);
         break;
     }

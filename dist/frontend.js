@@ -51,6 +51,60 @@ var SPOTIFY_WIDGET_CSS = `
   margin: 0;
 }
 
+/* Collapsible section (Playlists). The lyrics are the only flex:1 child of the
+   panel, so a permanently expanded list here would take its full height and
+   squeeze the lyric viewport to nothing. */
+.spotify-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.spotify-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.spotify-collapsible > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.15s ease;
+  transform-origin: 30% 50%;
+}
+
+.spotify-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.spotify-collapsible-count {
+  font-size: 10px;
+  color: var(--lumiverse-text-muted);
+  background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.spotify-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Bound the open list so an expanded section still leaves room for lyrics. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.spotify-collapsible-body .spotify-search-results {
+  /* The body already scrolls; a nested scroller would trap wheel events. */
+  max-height: none;
+  overflow-y: visible;
+}
+
 /* Settings card (matches SimTracker pattern) */
 .spotify-settings-card {
   width: 100%;
@@ -2660,6 +2714,7 @@ var PREVIOUS = `<svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
 var PLAY = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
 var PAUSE = `<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
 var NEXT = `<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`;
+var SHUFFLE = `<svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8h-2.2l-2.3 2.9-1.3-1.6L14 6h3zM3 6h4.2l7.6 9.5H17v-3l4 4-4 4v-3h-3.3L5.9 7.8 4.5 9.2 3 7.8z"/></svg>`;
 function createControlsUI(send) {
   const root = document.createElement("div");
   root.className = "spotify-section";
@@ -2677,20 +2732,41 @@ function createControlsUI(send) {
   const previous = button(PREVIOUS);
   const playPause = button(PLAY, "spotify-ctrl-btn-main");
   const next = button(NEXT);
-  previous.onclick = () => send({ type: "previous" });
-  next.onclick = () => send({ type: "next" });
+  const error = document.createElement("div");
+  error.className = "spotify-search-error";
+  error.style.cssText = "display:none;font-size:0.8em;color:#e74c3c;margin-top:6px;word-break:break-word";
+  const setError = (message) => {
+    error.textContent = message || "";
+    error.style.display = message ? "" : "none";
+  };
+  const dispatch = (message) => {
+    setError(null);
+    send(message);
+  };
+  previous.onclick = () => dispatch({ type: "previous" });
+  next.onclick = () => dispatch({ type: "next" });
+  const shuffle = button(SHUFFLE);
+  shuffle.title = "Shuffle the queued tracks";
+  shuffle.onclick = () => dispatch({ type: "shuffle" });
   let isPlaying = false;
-  playPause.onclick = () => send({ type: isPlaying ? "pause" : "play" });
-  row.append(previous, playPause, next);
-  root.append(title, row);
-  return { root, update(state, connected, enabled, titleText = "Player Controls") {
-    root.style.display = connected && enabled ? "" : "none";
-    title.textContent = titleText;
-    isPlaying = !!state?.isPlaying;
-    playPause.innerHTML = isPlaying ? PAUSE : PLAY;
-  }, destroy() {
-    root.remove();
-  } };
+  playPause.onclick = () => dispatch({ type: isPlaying ? "pause" : "play" });
+  row.append(previous, playPause, next, shuffle);
+  root.append(title, row, error);
+  return {
+    root,
+    update(state, connected, enabled, titleText = "Player Controls") {
+      root.style.display = connected && enabled ? "" : "none";
+      if (!connected || !enabled)
+        setError(null);
+      title.textContent = titleText;
+      isPlaying = !!state?.isPlaying;
+      playPause.innerHTML = isPlaying ? PAUSE : PLAY;
+    },
+    setError,
+    destroy() {
+      root.remove();
+    }
+  };
 }
 
 // src/ui/search.ts
@@ -2781,6 +2857,99 @@ function createSearchUI(send) {
       clearTimeout(timer);
     root.remove();
   } };
+}
+
+// src/ui/playlists.ts
+var PLAY3 = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+function createPlaylistsUI(send) {
+  const root = document.createElement("details");
+  root.className = "spotify-section spotify-collapsible";
+  const summary = document.createElement("summary");
+  summary.className = "spotify-section-title spotify-collapsible-summary";
+  const title = document.createElement("span");
+  title.textContent = "Playlists";
+  const count = document.createElement("span");
+  count.className = "spotify-collapsible-count";
+  summary.append(title, count);
+  const inner = document.createElement("div");
+  inner.className = "spotify-collapsible-body";
+  const input = document.createElement("input");
+  input.className = "spotify-search-input";
+  input.placeholder = "Filter playlists…";
+  const list = document.createElement("div");
+  list.className = "spotify-search-results";
+  inner.append(input, list);
+  root.append(summary, inner);
+  let playlists = [];
+  let playbackAvailable = true;
+  const matches = (playlist, query) => !query || playlist.name.toLowerCase().includes(query) || playlist.owner.toLowerCase().includes(query);
+  const render = () => {
+    list.innerHTML = "";
+    const query = input.value.trim().toLowerCase();
+    const visible = playlists.filter((playlist) => matches(playlist, query));
+    if (!visible.length) {
+      const empty = document.createElement("div");
+      empty.className = "spotify-empty";
+      empty.textContent = playlists.length ? "No playlists match" : "No playlists on this server";
+      list.appendChild(empty);
+      return;
+    }
+    for (const playlist of visible) {
+      const item = document.createElement("div");
+      item.className = "spotify-search-item";
+      if (playlist.albumArtUrl) {
+        const image = document.createElement("img");
+        image.className = "spotify-search-item-art";
+        image.src = playlist.albumArtUrl;
+        image.alt = playlist.name;
+        item.appendChild(image);
+      }
+      const info = document.createElement("div");
+      info.className = "spotify-search-item-info";
+      const name = document.createElement("div");
+      name.className = "spotify-search-item-name";
+      name.textContent = playlist.name;
+      const count = Number.isFinite(playlist.songCount) ? playlist.songCount : 0;
+      const detail = document.createElement("div");
+      detail.className = "spotify-search-item-artist";
+      detail.textContent = `${count} ${count === 1 ? "track" : "tracks"}`;
+      info.append(name, detail);
+      if (playbackAvailable) {
+        const actions = document.createElement("div");
+        actions.className = "spotify-search-item-actions";
+        const play = document.createElement("button");
+        play.className = "spotify-search-item-btn";
+        play.title = "Play this playlist in the server Jukebox";
+        play.innerHTML = PLAY3;
+        play.onclick = () => send({ type: "play_playlist", playlistId: playlist.id });
+        actions.appendChild(play);
+        item.append(info, actions);
+      } else
+        item.appendChild(info);
+      list.appendChild(item);
+    }
+  };
+  input.oninput = render;
+  const renderCount = () => {
+    const total = playlists.length;
+    count.textContent = total ? String(total) : "";
+    root.style.display = total ? "" : "none";
+  };
+  return {
+    root,
+    setPlaylists(next) {
+      playlists = next;
+      renderCount();
+      render();
+    },
+    setPlaybackAvailable(available) {
+      playbackAvailable = available;
+      render();
+    },
+    destroy() {
+      root.remove();
+    }
+  };
 }
 
 // src/ui/lyric-auto-scroll.ts
@@ -5291,11 +5460,13 @@ function setup(ctx) {
     window.removeEventListener("resize", updateTabHeight);
   });
   const nowPlaying = createNowPlayingUI();
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "shuffle", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
+  const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  panel.append(nowPlaying.root, controls.root, search.root, lyrics.root);
-  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => lyrics.destroy());
+  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
+  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
   let connected = false;
   let currentState = null;
   let lyricsTrackId = null;
@@ -5882,6 +6053,8 @@ function setup(ctx) {
         settings.update(message.connected, message.serverUrl, message.username, message.hasPassword, message.remoteControl, message.feishinUrl, message.feishinUsername, message.hasFeishinPassword, message.playbackPositionOffsetMs, message.jukeboxUnavailableReason);
         search.setAvailable(true);
         search.setPlaybackAvailable(message.remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(message.remoteControl === "jukebox");
+        send({ type: "get_playlists" });
         controls.update(currentState, connected, message.remoteControl !== "none", message.remoteControl === "feishin" ? "Feishin Controls" : "Jukebox Controls");
         syncWidget();
         break;
@@ -5956,6 +6129,7 @@ function setup(ctx) {
         jukeboxEnabled = false;
         search.setAvailable(true);
         search.setPlaybackAvailable(remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(remoteControl === "jukebox");
         lastThemeArtUrl = null;
         albumPaletteCache.clear();
         clearAlbumTheme();
@@ -5968,6 +6142,9 @@ function setup(ctx) {
         break;
       case "search_results":
         search.setResults(message.results);
+        break;
+      case "playlists":
+        playlists.setPlaylists(message.playlists);
         break;
       case "chat_songs":
         songBadges.setChatSongs(message.chatId, message.entries);
@@ -5986,6 +6163,7 @@ function setup(ctx) {
       case "error":
         if (message.operation === "connect" || message.authenticationFailure)
           settings.setError(message.message);
+        controls.setError(TRANSPORT_OPERATIONS.has(message.operation || "") ? message.message : null);
         console.warn("[Subsonic Controls]", message.message);
         break;
     }

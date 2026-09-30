@@ -1,7 +1,7 @@
 {
-  "identifier": "subsonic_controls",
+  "identifier": "subsonic_control",
   "version": "0.3.6",
-  "name": "Subsonic Controls",
+  "name": "Subsonic Control",
   "author": "Prolix OCs",
   "github": "",
   "homepage": "https://lumiverse.chat",

@@ -1,7 +1,7 @@
 declare const spindle: import("lumiverse-spindle-types").SpindleAPI;
 declare const Bun: { CryptoHasher: new (algorithm: string) => { update(value: string): void; digest(encoding: "hex"): string } };
 
-import type { PlaybackState, SearchResult, SubsonicConfig } from "./types";
+import type { PlaybackState, PlaylistSummary, SearchResult, SubsonicConfig } from "./types";
 
 type ApiResponse = { status: number; body: string };
 type SubsonicPayload = Record<string, any>;
@@ -14,6 +14,9 @@ export interface LyricsData {
 
 const CLIENT_NAME = "LumiverseSubsonicControls";
 const API_VERSION = "1.16.1";
+// Subsonic accepts many repeated `id` params, but request URLs have practical
+// length limits, so long albums and playlists are queued in batches.
+const MAX_IDS_PER_REQUEST = 50;
 const configs = new Map<string, SubsonicConfig>();
 const coverArtUrls = new Map<string, string>();
 let activeUserId: string | null = null;
@@ -83,7 +86,7 @@ export function isAuthenticationError(error: unknown): boolean {
     && (error as Error & { authenticationFailure?: boolean }).authenticationFailure === true;
 }
 
-async function request(method: string, values: Record<string, string | number | undefined> = {}, userId?: string): Promise<SubsonicPayload> {
+async function request(method: string, values: Record<string, string | number | string[] | undefined> = {}, userId?: string): Promise<SubsonicPayload> {
   const config = getConfig(userId);
   const s = salt();
   const params = new URLSearchParams({
@@ -94,7 +97,13 @@ async function request(method: string, values: Record<string, string | number | 
     c: CLIENT_NAME,
     f: "json",
   });
-  for (const [key, value] of Object.entries(values)) if (value !== undefined) params.set(key, String(value));
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) continue;
+    // Some endpoints (notably jukeboxControl's add/set) take a repeated `id`.
+    // URLSearchParams.set would collapse those into one value.
+    if (Array.isArray(value)) for (const item of value) params.append(key, String(item));
+    else params.set(key, String(value));
+  }
   const result = await spindle.cors(`${restRoot(config.serverUrl)}/${method}.view?${params.toString()}`, { method: "GET" }) as ApiResponse;
   if (result.status < 200 || result.status >= 300) {
     if (method === "jukeboxControl" && isJukeboxUnavailableStatus(result.status)) {
@@ -181,6 +190,30 @@ export async function verifyJukebox(userId?: string): Promise<void> {
   await request("jukeboxControl", { action: "get" }, userId);
 }
 
+/**
+ * Lists saved playlists. The Subsonic API has no playlist search endpoint, so
+ * `query` filtering is intentionally client-side.
+ */
+export async function getPlaylists(userId?: string): Promise<PlaylistSummary[]> {
+  const response = await request("getPlaylists", {}, userId);
+  const playlists: any[] = Array.isArray(response.playlists?.playlist) ? response.playlists.playlist : [];
+  const summaries: PlaylistSummary[] = [];
+  // Sequential rather than Promise.all: each entry resolves cover art through
+  // the backend image proxy, and this keeps that from stampeding the proxy.
+  for (const playlist of playlists) {
+    const id = String(playlist?.id || "");
+    if (!id) continue;
+    summaries.push({
+      id,
+      name: playlist?.name || "Untitled playlist",
+      owner: playlist?.owner || "",
+      songCount: Number(playlist?.songCount || 0),
+      albumArtUrl: await artUrl(playlist?.coverArt, userId),
+    });
+  }
+  return summaries;
+}
+
 export async function search(query: string, userId?: string): Promise<SearchResult[]> {
   const response = await request("search3", { query, songCount: 25, albumCount: 0, artistCount: 0 }, userId);
   const songs = response.searchResult3?.song || [];
@@ -192,10 +225,16 @@ export async function getPlaybackState(userId?: string): Promise<PlaybackState |
   if (config.enableJukebox) {
     try {
       const response = await request("jukeboxControl", { action: "get" }, userId);
-      const status = response.jukeboxStatus;
-      const index = Number(status?.currentIndex);
-      const current = status?.playing && Number.isInteger(index) ? status.playlist?.entry?.[index] : null;
-      if (current) return mapState(current, true, "jukebox", Math.max(0, Number(status.position || 0) * 1000), userId);
+      // Subsonic returns jukeboxPlaylist for action=get, and jukeboxStatus for
+      // every other action. The playlist extends the status with the entry
+      // list, so both the index and the entries live on this one object.
+      const playlist = response.jukeboxPlaylist;
+      const index = Number(playlist?.currentIndex);
+      const current = Number.isInteger(index) ? playlist?.entry?.[index] : null;
+      // currentIndex stays put while stopped, so the track must be resolved
+      // regardless of `playing`. Otherwise pausing would drop the state and
+      // fall back to getNowPlaying, which never reports jukebox playback.
+      if (current) return mapState(current, playlist.playing === true, "jukebox", Math.max(0, Number(playlist.position || 0) * 1000), userId);
     } catch {
       // This optional probe falls back to getNowPlaying. Let the caller report
       // a failed state fetch rather than logging the same outage twice.
@@ -218,20 +257,90 @@ export async function getPlaybackState(userId?: string): Promise<PlaybackState |
   return mapState(own, isPlaying, "now_playing", positionKnown ? reportedPositionMs : 0, userId, positionKnown);
 }
 
-async function jukebox(action: string, values: Record<string, string | number | undefined> = {}, userId?: string): Promise<void> {
+function assertJukeboxEnabled(userId?: string): void {
   if (!getConfig(userId).enableJukebox) throw new Error("Server-side Jukebox is disabled. Enable it in Subsonic Controls settings to use playback controls.");
+}
+
+async function jukebox(action: string, values: Record<string, string | number | undefined> = {}, userId?: string): Promise<void> {
+  assertJukeboxEnabled(userId);
   await request("jukeboxControl", { action, ...values }, userId);
+}
+
+/**
+ * Replaces the jukebox queue with `trackIds` and starts at `startIndex`.
+ *
+ * A single-track queue makes both skip buttons inert: Navidrome clamps
+ * SetIndex to the last valid entry, so "next" restarts the track and "previous"
+ * has nowhere to go. Enqueuing a whole album or playlist is what gives the
+ * transport something to move through.
+ */
+async function replaceQueueAndPlay(trackIds: string[], startIndex: number, userId?: string): Promise<void> {
+  assertJukeboxEnabled(userId);
+  if (!trackIds.length) return;
+  const bounded = Math.max(0, Math.min(startIndex, trackIds.length - 1));
+  await request("jukeboxControl", { action: "clear" }, userId);
+  // Subsonic takes every song in one request, but very long queues are split to
+  // keep the URL below the length some servers and proxies reject.
+  for (let offset = 0; offset < trackIds.length; offset += MAX_IDS_PER_REQUEST) {
+    await request("jukeboxControl", { action: "add", id: trackIds.slice(offset, offset + MAX_IDS_PER_REQUEST) }, userId);
+  }
+  await request("jukeboxControl", { action: "skip", index: bounded }, userId);
+  await request("jukeboxControl", { action: "start" }, userId);
 }
 
 export async function play(trackId: string | undefined, userId?: string): Promise<void> {
   if (!trackId) return jukebox("start", {}, userId);
-  await jukebox("clear", {}, userId);
-  await jukebox("add", { id: trackId }, userId);
-  await jukebox("start", {}, userId);
+  // Queue the rest of the album and start at the clicked track, so skipping
+  // behaves like a normal album player.
+  const album = await request("getAlbum", { id: trackId }, userId).catch(() => null);
+  const songs: any[] = Array.isArray(album?.album?.song) ? album.album.song : [];
+  if (songs.length > 1) {
+    const trackIds = songs.map((song) => String(song?.id || "")).filter(Boolean);
+    const startIndex = trackIds.indexOf(trackId);
+    if (startIndex >= 0) return replaceQueueAndPlay(trackIds, startIndex, userId);
+  }
+  // getAlbum resolves albums by album ID, so a plain song ID may not match.
+  // Fall back to a single-track queue rather than refusing to play.
+  await replaceQueueAndPlay([trackId], 0, userId);
+}
+
+/** Replaces the queue with a saved playlist and plays it from the start. */
+export async function playPlaylist(playlistId: string, userId?: string): Promise<void> {
+  const playlist = await request("getPlaylist", { id: playlistId }, userId);
+  const entries: any[] = Array.isArray(playlist?.playlist?.entry) ? playlist.playlist.entry : [];
+  const trackIds = entries.map((entry) => String(entry?.id || "")).filter(Boolean);
+  await replaceQueueAndPlay(trackIds, 0, userId);
 }
 export async function pause(userId?: string): Promise<void> { await jukebox("stop", {}, userId); }
-export async function next(userId?: string): Promise<void> { await jukebox("skip", {}, userId); }
-export async function previous(userId?: string): Promise<void> { await jukebox("previous", {}, userId); }
+/**
+ * Shuffles the queued tracks. This is a one-shot reorder, not a sticky mode:
+ * the API exposes no shuffle flag, so there is no on/off state to read back
+ * and no way to restore the original order. The current track keeps playing.
+ */
+export async function shuffle(userId?: string): Promise<void> { await jukebox("shuffle", {}, userId); }
+export async function next(userId?: string): Promise<void> {
+  // Navidrome rejects a bare `skip` with error 10 ("missing parameter index"),
+  // even though the spec marks index as optional, so the next index is resolved
+  // here instead of relying on the server to advance implicitly.
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  // A negative currentIndex means nothing is loaded, so there is no next track.
+  if (!Number.isInteger(index) || index < 0) return;
+  await request("jukeboxControl", { action: "skip", index: index + 1 }, userId);
+}
+export async function previous(userId?: string): Promise<void> {
+  // The Subsonic jukebox API has no "previous" action (its actions are get,
+  // status, set, start, stop, skip, add, clear, remove, shuffle, setGain), so
+  // going back is expressed as a skip to the preceding playlist index.
+  assertJukeboxEnabled(userId);
+  const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
+  const index = Number(playlist?.currentIndex);
+  // currentIndex is -1 (or absent) when nothing is loaded, and 0 is the first
+  // track, so neither has a previous entry.
+  if (!Number.isInteger(index) || index <= 0) return;
+  await request("jukeboxControl", { action: "skip", index: index - 1 }, userId);
+}
 export async function addToQueue(trackId: string, userId?: string): Promise<void> { await jukebox("add", { id: trackId }, userId); }
 
 function toLrcTimestamp(startMs: number): string {
