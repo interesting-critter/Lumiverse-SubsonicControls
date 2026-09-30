@@ -29,7 +29,11 @@ var Gt=`
   flex: 1 1 auto;
   min-height: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  /* Safety net: if the sections together genuinely exceed the tab height, let
+     the panel scroll instead of clipping the last child out of reach. The
+     lyrics keep their own scroller, so this only engages on short panels. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   font-family: system-ui, -apple-system, sans-serif;
   color: var(--lumiverse-text);
 }
@@ -50,9 +54,18 @@ var Gt=`
   margin: 0;
 }
 
-/* Collapsible section (Playlists). The lyrics are the only flex:1 child of the
-   panel, so a permanently expanded list here would take its full height and
-   squeeze the lyric viewport to nothing. */
+/* Collapsible section (Playlists). Unlike every other .spotify-section this one
+   must be allowed to shrink and must be capped: an expanded list sized itself
+   by content, grew past the bottom of the panel, and overflow:hidden on
+   .spotify-panel then clipped it so the list appeared to open upward over the
+   lyrics. Capping the section keeps the scroll inside .spotify-collapsible-body. */
+.spotify-collapsible {
+  /* Sized by its own content and never squeezed: the panel scrolls when the
+     sections exceed the tab height, so this section does not need to give up
+     space to protect the lyrics. */
+  flex-shrink: 0;
+}
+
 .spotify-collapsible > summary {
   list-style: none;
   cursor: pointer;
@@ -92,9 +105,15 @@ var Gt=`
 .spotify-collapsible-body {
   display: flex;
   flex-direction: column;
+  /* Take the space the capped section gives us and no more, so the filter input
+     stays pinned and only the list scrolls. */
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 8px;
-  /* Bound the open list so an expanded section still leaves room for lyrics. */
-  max-height: 40vh;
+  /* A share of the viewport rather than a fixed height: the drawer tab is far
+     shorter than the window, so an unbounded list grew tall enough to dominate
+     the panel. */
+  max-height: min(34vh, 240px);
   overflow-y: auto;
 }
 
@@ -1849,7 +1868,10 @@ var Gt=`
 
 /* Lyrics */
 .spotify-lyrics-section {
-  min-height: 0;
+  /* Absorbs leftover height when there is any, but is free to shrink to its
+     floor: .spotify-panel now scrolls, so there is no need to hold this rigid
+     and squeeze the sections below it. */
+  min-height: 96px;
   flex: 1 1 auto;
   overflow: hidden;
   /* Lets the rules below react to how tall the lyric viewport actually is,
