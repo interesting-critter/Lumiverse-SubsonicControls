@@ -181,10 +181,14 @@ export function setup(ctx: SpindleFrontendContext) {
 
   function updateTabHeight() {
     const top = tab.root.getBoundingClientRect().top;
-    const parentBottom = tab.root.parentElement?.getBoundingClientRect().bottom ?? window.innerHeight;
+    // Fill the space the drawer actually offers. The previous version also
+    // clamped against the parent's bottom edge, which is circular: the parent's
+    // height is derived from this tab, whose height is derived from that edge.
+    // The panel therefore settled short of the drawer's bottom and left an empty
+    // band below the content. The panel scrolls internally, so filling to the
+    // viewport is safe.
     const viewportBottom = window.visualViewport?.height ?? window.innerHeight;
-    const bottom = Math.min(parentBottom, viewportBottom);
-    tab.root.style.setProperty("--spotify-tab-height", `${Math.max(240, bottom - top - 2)}px`);
+    tab.root.style.setProperty("--spotify-tab-height", `${Math.max(240, viewportBottom - top - 2)}px`);
   }
   updateTabHeight();
   const tabHeightObserver = new ResizeObserver(updateTabHeight);
