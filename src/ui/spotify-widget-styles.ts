@@ -64,6 +64,7 @@ export const SPOTIFY_WIDGET_CSS = `
      sections exceed the tab height, so this section does not need to give up
      space to protect the lyrics. */
   flex-shrink: 0;
+  min-height: 0;
 }
 
 .spotify-collapsible > summary {
@@ -113,7 +114,7 @@ export const SPOTIFY_WIDGET_CSS = `
   /* A share of the viewport rather than a fixed height: the drawer tab is far
      shorter than the window, so an unbounded list grew tall enough to dominate
      the panel. */
-  max-height: min(34vh, 240px);
+  max-height: min(40vh, 300px);
   overflow-y: auto;
 }
 
@@ -1872,6 +1873,7 @@ export const SPOTIFY_WIDGET_CSS = `
      floor: .spotify-panel now scrolls, so there is no need to hold this rigid
      and squeeze the sections below it. */
   min-height: 96px;
+  max-height: 200;
   flex: 1 1 auto;
   overflow: hidden;
   /* Lets the rules below react to how tall the lyric viewport actually is,
