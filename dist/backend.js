@@ -2,6 +2,7 @@
 // src/subsonic-api.ts
 var CLIENT_NAME = "LumiverseSubsonicControls";
 var API_VERSION = "1.16.1";
+var MAX_IDS_PER_REQUEST = 50;
 var configs = new Map;
 var coverArtUrls = new Map;
 var activeUserId = null;
@@ -74,9 +75,15 @@ async function request(method, values = {}, userId) {
     c: CLIENT_NAME,
     f: "json"
   });
-  for (const [key, value] of Object.entries(values))
-    if (value !== undefined)
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined)
+      continue;
+    if (Array.isArray(value))
+      for (const item of value)
+        params.append(key, String(item));
+    else
       params.set(key, String(value));
+  }
   const result = await spindle.cors(`${restRoot(config.serverUrl)}/${method}.view?${params.toString()}`, { method: "GET" });
   if (result.status < 200 || result.status >= 300) {
     if (method === "jukeboxControl" && isJukeboxUnavailableStatus(result.status)) {
@@ -156,6 +163,24 @@ async function ping(userId) {
 async function verifyJukebox(userId) {
   await request("jukeboxControl", { action: "get" }, userId);
 }
+async function getPlaylists(userId) {
+  const response = await request("getPlaylists", {}, userId);
+  const playlists = Array.isArray(response.playlists?.playlist) ? response.playlists.playlist : [];
+  const summaries = [];
+  for (const playlist of playlists) {
+    const id = String(playlist?.id || "");
+    if (!id)
+      continue;
+    summaries.push({
+      id,
+      name: playlist?.name || "Untitled playlist",
+      owner: playlist?.owner || "",
+      songCount: Number(playlist?.songCount || 0),
+      albumArtUrl: await artUrl(playlist?.coverArt, userId)
+    });
+  }
+  return summaries;
+}
 async function search(query, userId) {
   const response = await request("search3", { query, songCount: 25, albumCount: 0, artistCount: 0 }, userId);
   const songs = response.searchResult3?.song || [];
@@ -193,12 +218,36 @@ async function jukebox(action, values = {}, userId) {
   assertJukeboxEnabled(userId);
   await request("jukeboxControl", { action, ...values }, userId);
 }
+async function replaceQueueAndPlay(trackIds, startIndex, userId) {
+  assertJukeboxEnabled(userId);
+  if (!trackIds.length)
+    return;
+  const bounded = Math.max(0, Math.min(startIndex, trackIds.length - 1));
+  await request("jukeboxControl", { action: "clear" }, userId);
+  for (let offset = 0;offset < trackIds.length; offset += MAX_IDS_PER_REQUEST) {
+    await request("jukeboxControl", { action: "add", id: trackIds.slice(offset, offset + MAX_IDS_PER_REQUEST) }, userId);
+  }
+  await request("jukeboxControl", { action: "skip", index: bounded }, userId);
+  await request("jukeboxControl", { action: "start" }, userId);
+}
 async function play(trackId, userId) {
   if (!trackId)
     return jukebox("start", {}, userId);
-  await jukebox("clear", {}, userId);
-  await jukebox("add", { id: trackId }, userId);
-  await jukebox("start", {}, userId);
+  const album = await request("getAlbum", { id: trackId }, userId).catch(() => null);
+  const songs = Array.isArray(album?.album?.song) ? album.album.song : [];
+  if (songs.length > 1) {
+    const trackIds = songs.map((song) => String(song?.id || "")).filter(Boolean);
+    const startIndex = trackIds.indexOf(trackId);
+    if (startIndex >= 0)
+      return replaceQueueAndPlay(trackIds, startIndex, userId);
+  }
+  await replaceQueueAndPlay([trackId], 0, userId);
+}
+async function playPlaylist(playlistId, userId) {
+  const playlist = await request("getPlaylist", { id: playlistId }, userId);
+  const entries = Array.isArray(playlist?.playlist?.entry) ? playlist.playlist.entry : [];
+  const trackIds = entries.map((entry) => String(entry?.id || "")).filter(Boolean);
+  await replaceQueueAndPlay(trackIds, 0, userId);
 }
 async function pause(userId) {
   await jukebox("stop", {}, userId);
@@ -1082,6 +1131,16 @@ spindle.onFrontendMessage(async (raw, userId) => {
       case "queue":
         await addToQueue(message.trackUri, userId);
         break;
+      case "get_playlists":
+        send({ type: "playlists", playlists: await getPlaylists(userId) }, userId);
+        break;
+      case "play_playlist": {
+        if ((await loadConfig(userId))?.remoteControl === "feishin")
+          throw new Error("Feishin Remote cannot play a Subsonic playlist. Choose the server-side Jukebox to play playlists.");
+        await playPlaylist(message.playlistId, userId);
+        await pushState(userId);
+        break;
+      }
       case "search":
         send({ type: "search_results", results: await search(message.query, userId) }, userId);
         break;

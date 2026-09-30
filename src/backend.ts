@@ -608,6 +608,13 @@ spindle.onFrontendMessage(async (raw, userId) => {
         break;
       }
       case "queue": await subsonic.addToQueue(message.trackUri, userId); break;
+      case "get_playlists": send({ type: "playlists", playlists: await subsonic.getPlaylists(userId) }, userId); break;
+      case "play_playlist": {
+        if ((await loadConfig(userId))?.remoteControl === "feishin") throw new Error("Feishin Remote cannot play a Subsonic playlist. Choose the server-side Jukebox to play playlists.");
+        await subsonic.playPlaylist(message.playlistId, userId);
+        await pushState(userId);
+        break;
+      }
       case "search": send({ type: "search_results", results: await subsonic.search(message.query, userId) }, userId); break;
       case "get_chat_songs": await sendChatSongs(message.chatId, userId); break;
       case "get_lyrics": {

@@ -2801,6 +2801,86 @@ function createSearchUI(send) {
   } };
 }
 
+// src/ui/playlists.ts
+var PLAY3 = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+function createPlaylistsUI(send) {
+  const root = document.createElement("div");
+  root.className = "spotify-section";
+  const title = document.createElement("h3");
+  title.className = "spotify-section-title";
+  title.textContent = "Playlists";
+  const input = document.createElement("input");
+  input.className = "spotify-search-input";
+  input.placeholder = "Filter playlists…";
+  const list = document.createElement("div");
+  list.className = "spotify-search-results";
+  root.append(title, input, list);
+  let playlists = [];
+  let playbackAvailable = true;
+  const matches = (playlist, query) => !query || playlist.name.toLowerCase().includes(query) || playlist.owner.toLowerCase().includes(query);
+  const render = () => {
+    list.innerHTML = "";
+    const query = input.value.trim().toLowerCase();
+    const visible = playlists.filter((playlist) => matches(playlist, query));
+    if (!visible.length) {
+      const empty = document.createElement("div");
+      empty.className = "spotify-empty";
+      empty.textContent = playlists.length ? "No playlists match" : "No playlists on this server";
+      list.appendChild(empty);
+      return;
+    }
+    for (const playlist of visible) {
+      const item = document.createElement("div");
+      item.className = "spotify-search-item";
+      if (playlist.albumArtUrl) {
+        const image = document.createElement("img");
+        image.className = "spotify-search-item-art";
+        image.src = playlist.albumArtUrl;
+        image.alt = playlist.name;
+        item.appendChild(image);
+      }
+      const info = document.createElement("div");
+      info.className = "spotify-search-item-info";
+      const name = document.createElement("div");
+      name.className = "spotify-search-item-name";
+      name.textContent = playlist.name;
+      const count = Number.isFinite(playlist.songCount) ? playlist.songCount : 0;
+      const detail = document.createElement("div");
+      detail.className = "spotify-search-item-artist";
+      detail.textContent = `${count} ${count === 1 ? "track" : "tracks"}`;
+      info.append(name, detail);
+      if (playbackAvailable) {
+        const actions = document.createElement("div");
+        actions.className = "spotify-search-item-actions";
+        const play = document.createElement("button");
+        play.className = "spotify-search-item-btn";
+        play.title = "Play this playlist in the server Jukebox";
+        play.innerHTML = PLAY3;
+        play.onclick = () => send({ type: "play_playlist", playlistId: playlist.id });
+        actions.appendChild(play);
+        item.append(info, actions);
+      } else
+        item.appendChild(info);
+      list.appendChild(item);
+    }
+  };
+  input.oninput = render;
+  return {
+    root,
+    setPlaylists(next) {
+      playlists = next;
+      render();
+    },
+    setPlaybackAvailable(available) {
+      playbackAvailable = available;
+      render();
+    },
+    destroy() {
+      root.remove();
+    }
+  };
+}
+
 // src/ui/lyric-auto-scroll.ts
 var USER_SCROLL_SUPPRESS_MS = 2500;
 var SCROLL_TIME_CONSTANT_MS = 85;
@@ -5312,9 +5392,10 @@ function setup(ctx) {
   const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
+  const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  panel.append(nowPlaying.root, controls.root, search.root, lyrics.root);
-  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => lyrics.destroy());
+  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
+  cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
   let connected = false;
   let currentState = null;
   let lyricsTrackId = null;
@@ -5901,6 +5982,8 @@ function setup(ctx) {
         settings.update(message.connected, message.serverUrl, message.username, message.hasPassword, message.remoteControl, message.feishinUrl, message.feishinUsername, message.hasFeishinPassword, message.playbackPositionOffsetMs, message.jukeboxUnavailableReason);
         search.setAvailable(true);
         search.setPlaybackAvailable(message.remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(message.remoteControl === "jukebox");
+        send({ type: "get_playlists" });
         controls.update(currentState, connected, message.remoteControl !== "none", message.remoteControl === "feishin" ? "Feishin Controls" : "Jukebox Controls");
         syncWidget();
         break;
@@ -5975,6 +6058,7 @@ function setup(ctx) {
         jukeboxEnabled = false;
         search.setAvailable(true);
         search.setPlaybackAvailable(remoteControl === "jukebox");
+        playlists.setPlaybackAvailable(remoteControl === "jukebox");
         lastThemeArtUrl = null;
         albumPaletteCache.clear();
         clearAlbumTheme();
@@ -5987,6 +6071,9 @@ function setup(ctx) {
         break;
       case "search_results":
         search.setResults(message.results);
+        break;
+      case "playlists":
+        playlists.setPlaylists(message.playlists);
         break;
       case "chat_songs":
         songBadges.setChatSongs(message.chatId, message.entries);
