@@ -27,7 +27,7 @@ export const SPOTIFY_WIDGET_CSS = `
   gap: 16px;
   padding: 12px 12px 0;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 100%;
   box-sizing: border-box;
   /* Safety net: if the sections together genuinely exceed the tab height, let
      the panel scroll instead of clipping the last child out of reach. The
