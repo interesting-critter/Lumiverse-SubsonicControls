@@ -16,13 +16,21 @@ export interface PlaylistsUI {
  * once and `matches()` narrows it locally as the user types.
  */
 export function createPlaylistsUI(send: (message: unknown) => void): PlaylistsUI {
-  const root = document.createElement("div"); root.className = "spotify-section";
-  const title = document.createElement("h3"); title.className = "spotify-section-title"; title.textContent = "Playlists";
+  // Collapsed by default. Every section is flex-shrink: 0 while the lyrics are
+  // the only flex:1 child, so an expanded playlist list takes its full natural
+  // height and starves the lyrics viewport down to almost nothing.
+  const root = document.createElement("details"); root.className = "spotify-section spotify-collapsible";
+  const summary = document.createElement("summary"); summary.className = "spotify-section-title spotify-collapsible-summary";
+  const title = document.createElement("span"); title.textContent = "Playlists";
+  const count = document.createElement("span"); count.className = "spotify-collapsible-count";
+  summary.append(title, count);
+  const inner = document.createElement("div"); inner.className = "spotify-collapsible-body";
   const input = document.createElement("input");
   input.className = "spotify-search-input";
   input.placeholder = "Filter playlists…";
   const list = document.createElement("div"); list.className = "spotify-search-results";
-  root.append(title, input, list);
+  inner.append(input, list);
+  root.append(summary, inner);
 
   let playlists: PlaylistSummary[] = [];
   let playbackAvailable = true;
@@ -76,9 +84,19 @@ export function createPlaylistsUI(send: (message: unknown) => void): PlaylistsUI
 
   input.oninput = render;
 
+  // The playlist count belongs in the summary, so the collapsed state still
+  // tells the user whether there is anything to open.
+  const renderCount = () => {
+    const total = playlists.length;
+    count.textContent = total ? String(total) : "";
+    // Hide the whole section when the server has no playlists, rather than
+    // offering an empty disclosure.
+    root.style.display = total ? "" : "none";
+  };
+
   return {
     root,
-    setPlaylists(next) { playlists = next; render(); },
+    setPlaylists(next) { playlists = next; renderCount(); render(); },
     setPlaybackAvailable(available) { playbackAvailable = available; render(); },
     destroy() { root.remove(); },
   };

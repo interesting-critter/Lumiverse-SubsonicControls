@@ -51,6 +51,60 @@ var SPOTIFY_WIDGET_CSS = `
   margin: 0;
 }
 
+/* Collapsible section (Playlists). The lyrics are the only flex:1 child of the
+   panel, so a permanently expanded list here would take its full height and
+   squeeze the lyric viewport to nothing. */
+.spotify-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.spotify-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.spotify-collapsible > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.15s ease;
+  transform-origin: 30% 50%;
+}
+
+.spotify-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.spotify-collapsible-count {
+  font-size: 10px;
+  color: var(--lumiverse-text-muted);
+  background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.spotify-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Bound the open list so an expanded section still leaves room for lyrics. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.spotify-collapsible-body .spotify-search-results {
+  /* The body already scrolls; a nested scroller would trap wheel events. */
+  max-height: none;
+  overflow-y: visible;
+}
+
 /* Settings card (matches SimTracker pattern) */
 .spotify-settings-card {
   width: 100%;
@@ -2808,17 +2862,24 @@ function createSearchUI(send) {
 // src/ui/playlists.ts
 var PLAY3 = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
 function createPlaylistsUI(send) {
-  const root = document.createElement("div");
-  root.className = "spotify-section";
-  const title = document.createElement("h3");
-  title.className = "spotify-section-title";
+  const root = document.createElement("details");
+  root.className = "spotify-section spotify-collapsible";
+  const summary = document.createElement("summary");
+  summary.className = "spotify-section-title spotify-collapsible-summary";
+  const title = document.createElement("span");
   title.textContent = "Playlists";
+  const count = document.createElement("span");
+  count.className = "spotify-collapsible-count";
+  summary.append(title, count);
+  const inner = document.createElement("div");
+  inner.className = "spotify-collapsible-body";
   const input = document.createElement("input");
   input.className = "spotify-search-input";
   input.placeholder = "Filter playlists…";
   const list = document.createElement("div");
   list.className = "spotify-search-results";
-  root.append(title, input, list);
+  inner.append(input, list);
+  root.append(summary, inner);
   let playlists = [];
   let playbackAvailable = true;
   const matches = (playlist, query) => !query || playlist.name.toLowerCase().includes(query) || playlist.owner.toLowerCase().includes(query);
@@ -2869,10 +2930,16 @@ function createPlaylistsUI(send) {
     }
   };
   input.oninput = render;
+  const renderCount = () => {
+    const total = playlists.length;
+    count.textContent = total ? String(total) : "";
+    root.style.display = total ? "" : "none";
+  };
   return {
     root,
     setPlaylists(next) {
       playlists = next;
+      renderCount();
       render();
     },
     setPlaybackAvailable(available) {

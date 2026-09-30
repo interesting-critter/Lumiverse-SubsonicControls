@@ -50,6 +50,60 @@ export const SPOTIFY_WIDGET_CSS = `
   margin: 0;
 }
 
+/* Collapsible section (Playlists). The lyrics are the only flex:1 child of the
+   panel, so a permanently expanded list here would take its full height and
+   squeeze the lyric viewport to nothing. */
+.spotify-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.spotify-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.spotify-collapsible > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.15s ease;
+  transform-origin: 30% 50%;
+}
+
+.spotify-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.spotify-collapsible-count {
+  font-size: 10px;
+  color: var(--lumiverse-text-muted);
+  background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.spotify-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Bound the open list so an expanded section still leaves room for lyrics. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.spotify-collapsible-body .spotify-search-results {
+  /* The body already scrolls; a nested scroller would trap wheel events. */
+  max-height: none;
+  overflow-y: visible;
+}
+
 /* Settings card (matches SimTracker pattern) */
 .spotify-settings-card {
   width: 100%;
