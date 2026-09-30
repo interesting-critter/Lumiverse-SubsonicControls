@@ -312,6 +312,12 @@ export async function playPlaylist(playlistId: string, userId?: string): Promise
   await replaceQueueAndPlay(trackIds, 0, userId);
 }
 export async function pause(userId?: string): Promise<void> { await jukebox("stop", {}, userId); }
+/**
+ * Shuffles the queued tracks. This is a one-shot reorder, not a sticky mode:
+ * the API exposes no shuffle flag, so there is no on/off state to read back
+ * and no way to restore the original order. The current track keeps playing.
+ */
+export async function shuffle(userId?: string): Promise<void> { await jukebox("shuffle", {}, userId); }
 export async function next(userId?: string): Promise<void> {
   // Navidrome rejects a bare `skip` with error 10 ("missing parameter index"),
   // even though the spec marks index as optional, so the next index is resolved

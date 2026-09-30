@@ -2660,6 +2660,7 @@ var PREVIOUS = `<svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
 var PLAY = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
 var PAUSE = `<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
 var NEXT = `<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`;
+var SHUFFLE = `<svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8h-2.2l-2.3 2.9-1.3-1.6L14 6h3zM3 6h4.2l7.6 9.5H17v-3l4 4-4 4v-3h-3.3L5.9 7.8 4.5 9.2 3 7.8z"/></svg>`;
 function createControlsUI(send) {
   const root = document.createElement("div");
   root.className = "spotify-section";
@@ -2690,9 +2691,12 @@ function createControlsUI(send) {
   };
   previous.onclick = () => dispatch({ type: "previous" });
   next.onclick = () => dispatch({ type: "next" });
+  const shuffle = button(SHUFFLE);
+  shuffle.title = "Shuffle the queued tracks";
+  shuffle.onclick = () => dispatch({ type: "shuffle" });
   let isPlaying = false;
   playPause.onclick = () => dispatch({ type: isPlaying ? "pause" : "play" });
-  row.append(previous, playPause, next);
+  row.append(previous, playPause, next, shuffle);
   root.append(title, row, error);
   return {
     root,
@@ -5389,7 +5393,7 @@ function setup(ctx) {
     window.removeEventListener("resize", updateTabHeight);
   });
   const nowPlaying = createNowPlayingUI();
-  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "queue"]);
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "shuffle", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
   const playlists = createPlaylistsUI(send);

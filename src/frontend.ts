@@ -198,7 +198,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const nowPlaying = createNowPlayingUI();
   // Backend operations whose failures belong next to the transport controls
   // rather than in the settings error area.
-  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "queue"]);
+  const TRANSPORT_OPERATIONS = new Set(["play", "pause", "next", "previous", "shuffle", "queue"]);
   const controls = createControlsUI(send);
   const search = createSearchUI(send);
   const playlists = createPlaylistsUI(send);

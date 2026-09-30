@@ -11,6 +11,7 @@ export type FrontendToBackend =
   | { type: "pause" }
   | { type: "next" }
   | { type: "previous" }
+  | { type: "shuffle" }
   | { type: "search"; query: string }
   | { type: "queue"; trackUri: string }
   | { type: "get_playlists" }

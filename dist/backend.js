@@ -252,6 +252,9 @@ async function playPlaylist(playlistId, userId) {
 async function pause(userId) {
   await jukebox("stop", {}, userId);
 }
+async function shuffle(userId) {
+  await jukebox("shuffle", {}, userId);
+}
 async function next(userId) {
   assertJukeboxEnabled(userId);
   const playlist = (await request("jukeboxControl", { action: "get" }, userId)).jukeboxPlaylist;
@@ -1124,6 +1127,15 @@ spindle.onFrontendMessage(async (raw, userId) => {
           feishinClients.get(userId)?.send("previous");
         else {
           await previous(userId);
+          await pushState(userId);
+        }
+        break;
+      }
+      case "shuffle": {
+        if ((await loadConfig(userId))?.remoteControl === "feishin")
+          feishinClients.get(userId)?.send("shuffle");
+        else {
+          await shuffle(userId);
           await pushState(userId);
         }
         break;

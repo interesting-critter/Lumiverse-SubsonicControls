@@ -607,6 +607,11 @@ spindle.onFrontendMessage(async (raw, userId) => {
         else { await subsonic.previous(userId); await pushState(userId); }
         break;
       }
+      case "shuffle": {
+        if ((await loadConfig(userId))?.remoteControl === "feishin") feishinClients.get(userId)?.send("shuffle");
+        else { await subsonic.shuffle(userId); await pushState(userId); }
+        break;
+      }
       case "queue": await subsonic.addToQueue(message.trackUri, userId); break;
       case "get_playlists": send({ type: "playlists", playlists: await subsonic.getPlaylists(userId) }, userId); break;
       case "play_playlist": {
