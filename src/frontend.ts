@@ -203,7 +203,9 @@ export function setup(ctx: SpindleFrontendContext) {
   const search = createSearchUI(send);
   const playlists = createPlaylistsUI(send);
   const lyrics = createLyricsUI();
-  panel.append(nowPlaying.root, controls.root, search.root, playlists.root, lyrics.root);
+  // Playlists sit below the lyrics: the lyrics are the only flex:1 child, so
+// anything above them competes for the leftover height.
+panel.append(nowPlaying.root, controls.root, search.root, lyrics.root, playlists.root);
   cleanups.push(() => nowPlaying.destroy(), () => controls.destroy(), () => search.destroy(), () => playlists.destroy(), () => lyrics.destroy());
 
   let connected = false;

@@ -1852,6 +1852,10 @@ export const SPOTIFY_WIDGET_CSS = `
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
+  /* Lets the rules below react to how tall the lyric viewport actually is,
+     rather than assuming a fixed size. */
+  container-type: size;
+  container-name: spotify-lyrics;
 }
 
 .spotify-lyrics-body {
@@ -1875,8 +1879,11 @@ export const SPOTIFY_WIDGET_CSS = `
   scroll-padding-top: 34%;
   scroll-padding-bottom: 112px;
   box-sizing: border-box;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 56px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 56px), transparent 100%);
+  /* The fade stops are capped as a share of the viewport as well as in pixels.
+     A fixed 40px/56px pair is invisible on a tall panel but covers most of a
+     90px one, which is what made the lyrics read as a black panel. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black min(40px, 22%), black min(calc(100% - 56px), 78%), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black min(40px, 22%), black min(calc(100% - 56px), 78%), transparent 100%);
 }
 
 /* When the tab has no remote transport controls, don't keep the extra tail
@@ -1885,8 +1892,24 @@ export const SPOTIFY_WIDGET_CSS = `
 .spotify-lyrics-section[data-transport="false"] .spotify-lyrics-has-content {
   padding-bottom: 36px;
   scroll-padding-bottom: 36px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 32px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black min(40px, 22%), black min(calc(100% - 32px), 84%), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black min(40px, 22%), black min(calc(100% - 32px), 84%), transparent 100%);
+}
+
+/* Short viewport: the reserved tail exists only to give the auto-scroller room
+   to park the active line at its midpoint. When there is no room, drop it and
+   stop fading, so the lyrics stay readable instead of fading into black. */
+@container spotify-lyrics (max-height: 260px) {
+  .spotify-lyrics-has-content {
+    padding-bottom: 12px;
+    scroll-padding-bottom: 12px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .spotify-lyrics-section[data-transport="false"] .spotify-lyrics-has-content {
+    padding-bottom: 8px;
+    scroll-padding-bottom: 8px;
+  }
 }
 
 .spotify-lyrics-status {
