@@ -24,7 +24,7 @@ export const SPOTIFY_WIDGET_CSS = `
 .spotify-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto auto minmax(96px, 1fr) auto;
+  grid-template-rows: auto auto auto auto minmax(96px, 1fr);
   gap: 16px;
   padding: 12px 12px 0;
   flex: 1 1 auto;
@@ -61,7 +61,7 @@ export const SPOTIFY_WIDGET_CSS = `
    .spotify-panel then clipped it so the list appeared to open upward over the
    lyrics. Capping the section keeps the scroll inside .spotify-collapsible-body. */
 .spotify-playlists-section {
-  grid-row: 5;
+  grid-row: 4;
   min-width: 0;
   min-height: 0;
   position: relative;
@@ -1878,7 +1878,7 @@ export const SPOTIFY_WIDGET_CSS = `
 
 /* Lyrics */
 .spotify-lyrics-section {
-  grid-row: 4;
+  grid-row: 5;
   min-width: 0;
   position: relative;
   z-index: 0;
