@@ -58,8 +58,9 @@ export const SPOTIFY_WIDGET_CSS = `
    200px so the list always has room, then grows to fill whatever height the
    sections above it left over, with the list scrolling inside it. */
 .spotify-playlists-section {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 200px;
+  align-self: end;
 }
 
 .spotify-playlists-header {
