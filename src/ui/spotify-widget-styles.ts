@@ -39,6 +39,7 @@ export const SPOTIFY_WIDGET_CSS = `
   flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
 .spotify-section-title {
@@ -96,6 +97,7 @@ export const SPOTIFY_WIDGET_CSS = `
   /* Bound the open list so an expanded section still leaves room for lyrics. */
   max-height: 40vh;
   overflow-y: auto;
+  margin-bottom: 8px;
 }
 
 .spotify-collapsible-body .spotify-search-results {
