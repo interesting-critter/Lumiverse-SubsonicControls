@@ -1849,7 +1849,7 @@ export const SPOTIFY_WIDGET_CSS = `
 
 /* Lyrics */
 .spotify-lyrics-section {
-  min-height: 0;
+  min-height: 200px;
   flex: 1 1 auto;
   overflow: hidden;
 }
