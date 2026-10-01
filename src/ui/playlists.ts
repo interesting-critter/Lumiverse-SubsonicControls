@@ -16,21 +16,21 @@ export interface PlaylistsUI {
  * once and `matches()` narrows it locally as the user types.
  */
 export function createPlaylistsUI(send: (message: unknown) => void): PlaylistsUI {
-  // Collapsed by default. Every section is flex-shrink: 0 while the lyrics are
-  // the only flex:1 child, so an expanded playlist list takes its full natural
-  // height and starves the lyrics viewport down to almost nothing.
-  const root = document.createElement("details"); root.className = "spotify-section spotify-collapsible";
-  const summary = document.createElement("summary"); summary.className = "spotify-section-title spotify-collapsible-summary";
-  const title = document.createElement("span"); title.textContent = "Playlists";
-  const count = document.createElement("span"); count.className = "spotify-collapsible-count";
-  summary.append(title, count);
-  const inner = document.createElement("div"); inner.className = "spotify-collapsible-body";
+  // A plain section, not a <details>. The collapsible version fought the
+  // lyrics for panel height and left a dead band under the list; this takes a
+  // guaranteed 200px minimum and grows into whatever space is left over.
+  const root = document.createElement("div"); root.className = "spotify-section spotify-playlists-section";
+  const header = document.createElement("div"); header.className = "spotify-playlists-header";
+  const title = document.createElement("h3"); title.className = "spotify-section-title"; title.textContent = "Playlists";
+  const count = document.createElement("span"); count.className = "spotify-playlists-count";
+  header.append(title, count);
+  const inner = document.createElement("div"); inner.className = "spotify-playlists-body";
   const input = document.createElement("input");
   input.className = "spotify-search-input";
   input.placeholder = "Filter playlists…";
   const list = document.createElement("div"); list.className = "spotify-search-results";
   inner.append(input, list);
-  root.append(summary, inner);
+  root.append(header, inner);
 
   let playlists: PlaylistSummary[] = [];
   let playbackAvailable = true;
@@ -84,13 +84,11 @@ export function createPlaylistsUI(send: (message: unknown) => void): PlaylistsUI
 
   input.oninput = render;
 
-  // The playlist count belongs in the summary, so the collapsed state still
-  // tells the user whether there is anything to open.
   const renderCount = () => {
     const total = playlists.length;
     count.textContent = total ? String(total) : "";
-    // Hide the whole section when the server has no playlists, rather than
-    // offering an empty disclosure.
+    // A permanently visible 200px section would be dead space on a server with
+    // no playlists, so hide it entirely in that case.
     root.style.display = total ? "" : "none";
   };
 

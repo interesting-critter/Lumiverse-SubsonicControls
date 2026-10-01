@@ -54,48 +54,21 @@ export const SPOTIFY_WIDGET_CSS = `
   margin: 0;
 }
 
-/* Collapsible section (Playlists). Unlike every other .spotify-section this one
-   must be allowed to shrink and must be capped: an expanded list sized itself
-   by content, grew past the bottom of the panel, and overflow:hidden on
-   .spotify-panel then clipped it so the list appeared to open upward over the
-   lyrics. Capping the section keeps the scroll inside .spotify-collapsible-body. */
-.spotify-collapsible {
-  /* Sized by its own content and never squeezed: the panel scrolls when the
-     sections exceed the tab height, so this section does not need to give up
-     space to protect the lyrics. */
-  flex-shrink: 0;
-  min-height: 0;
+/* Playlists section. A plain section (no <details>): it takes a guaranteed
+   200px so the list always has room, then grows to fill whatever height the
+   sections above it left over, with the list scrolling inside it. */
+.spotify-playlists-section {
+  flex: 1 1 auto;
+  min-height: 200px;
 }
 
-.spotify-collapsible > summary {
-  list-style: none;
-  cursor: pointer;
+.spotify-playlists-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  user-select: none;
 }
 
-.spotify-collapsible > summary::-webkit-details-marker {
-  display: none;
-}
-
-.spotify-collapsible > summary::before {
-  content: "";
-  width: 0;
-  height: 0;
-  border-left: 4px solid currentColor;
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
-  transition: transform 0.15s ease;
-  transform-origin: 30% 50%;
-}
-
-.spotify-collapsible[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-.spotify-collapsible-count {
+.spotify-playlists-count {
   font-size: 10px;
   color: var(--lumiverse-text-muted);
   background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.08));
@@ -103,25 +76,25 @@ export const SPOTIFY_WIDGET_CSS = `
   padding: 1px 6px;
 }
 
-.spotify-collapsible-body {
+.spotify-playlists-body {
   display: flex;
   flex-direction: column;
-  /* Take the space the capped section gives us and no more, so the filter input
-     stays pinned and only the list scrolls. */
   flex: 1 1 auto;
   min-height: 0;
   gap: 8px;
-  /* A share of the viewport rather than a fixed height: the drawer tab is far
-     shorter than the window, so an unbounded list grew tall enough to dominate
-     the panel. */
-  max-height: min(40vh, 300px);
-  overflow-y: auto;
+  /* The body must not scroll: the list child owns the scrolling so the filter
+     input above it stays put. */
+  overflow: hidden;
 }
 
-.spotify-collapsible-body .spotify-search-results {
-  /* The body already scrolls; a nested scroller would trap wheel events. */
+.spotify-playlists-body .spotify-search-results {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
-  overflow-y: visible;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--lumiverse-fill-strong) transparent;
 }
 
 /* Settings card (matches SimTracker pattern) */
@@ -1869,11 +1842,9 @@ export const SPOTIFY_WIDGET_CSS = `
 
 /* Lyrics */
 .spotify-lyrics-section {
-  /* Absorbs leftover height when there is any, but is free to shrink to its
-     floor: .spotify-panel now scrolls, so there is no need to hold this rigid
-     and squeeze the sections below it. */
+  /* Shares leftover panel height with the playlists section, but keeps a floor
+     so the viewport never collapses to nothing. */
   min-height: 96px;
-  max-height: 200;
   flex: 1 1 auto;
   overflow: hidden;
   /* Lets the rules below react to how tall the lyric viewport actually is,
